@@ -1,73 +1,63 @@
 import bcrypt
 from pathlib import Path
-from app.data.db import connect_database
-from app.data.users import get_user_by_username, insert_user
 
+# users.txt location
 DATA_DIR = Path(__file__).resolve().parents[2] / "DATA"
+USERS_FILE = DATA_DIR / "users.txt"
 
-def register_user(username, password, role='user'):
-    """
-    Register a user using bcrypt for hashing.
-    Returns (True, message) on success, (False, message) on failure.
-    """
-    # check exists
-    if get_user_by_username(username):
-        return False, f"User '{username}' already exists."
+DATA_DIR.mkdir(exist_ok=True)
+USERS_FILE.touch(exist_ok=True)
 
-    # hash password
-    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    password_hash = hashed.decode('utf-8')
 
-    lastid = insert_user(username, password_hash, role)
-    return True, f"User '{username}' registered (id={lastid})."
 
-def login_user(username, password):
-    user = get_user_by_username(username)
-    if not user:
-        return False, "User not found."
+# register a new user
 
-    stored_hash = user[2]  # password_hash column
-    if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
-        return True, f"Login successful for {username}."
-    else:
-        return False, "Incorrect password."
+def register_user(username: str, password: str):
+    username = username.strip()
 
-def migrate_users_from_file(filepath=None):
-    """
-    Migrate users from DATA/users.txt into database.
-    Format expected: username,password_hash,role
-    If the file has plain-text passwords (Week 7), the safe approach is to ask the user.
-    This implementation expects bcrypt hashes already in file.
-    """
-    filepath = filepath or (DATA_DIR / "users.txt")
-    if not filepath.exists():
-        print(f"No users file found at {filepath}")
-        return 0
+    if not username or not password:
+        return False, "Username and password are required."
 
-    conn = connect_database()
-    cursor = conn.cursor()
-    migrated = 0
-    with open(filepath, 'r', encoding='utf-8') as f:
+    # check if user already exists
+    with open(USERS_FILE, "r", encoding="utf-8") as f:
         for line in f:
-            line = line.strip()
-            if not line:
+            parts = line.strip().split(",")
+            if len(parts) >= 1 and parts[0] == username:
+                return False, "Username already exists."
+
+    # hash password with bcrypt
+    hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+    # save user (username, hashed_password, role)
+    with open(USERS_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{username},{hashed_pw},user\n")
+
+    return True, "Account created successfully."
+
+
+
+# loggin existing user
+
+def login_user(username: str, password: str):
+    username = username.strip()
+
+    if not username or not password:
+        return False, "Username and password are required."
+
+    with open(USERS_FILE, "r", encoding="utf-8") as f:
+        for line in f:
+            parts = line.strip().split(",")
+
+            # must be exactly: username, hash, role
+            if len(parts) != 3:
                 continue
-            parts = line.split(',')
-            if len(parts) < 2:
-                continue
-            username = parts[0].strip()
-            password_hash = parts[1].strip()
-            role = parts[2].strip() if len(parts) > 2 else 'user'
-            try:
-                cursor.execute(
-                    "INSERT OR IGNORE INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                    (username, password_hash, role)
-                )
-                if cursor.rowcount:
-                    migrated += 1
-            except Exception as e:
-                print("Error migrating", username, e)
-    conn.commit()
-    conn.close()
-    print(f"Migrated {migrated} users from {filepath.name}")
-    return migrated
+
+            stored_user, stored_hash, role = parts
+
+            if stored_user == username:
+                if bcrypt.checkpw(password.encode(), stored_hash.encode()):
+                    return True, "Login successful"
+                else:
+                    return False, "Invalid username or password"
+
+    return False, "User not found"
