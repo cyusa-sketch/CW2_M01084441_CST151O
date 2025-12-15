@@ -1,58 +1,45 @@
 import streamlit as st
-import pandas as pd
-from app.data.incidents import get_all_incidents, insert_incident as create_incident
+from datetime import date
+from app.data.incidents import get_all_incidents, create_incident
 
-st.title("Cyber Dashboard")
+st.title("Cyber Incident Dashboard")
 
-with st.spinner("Loading incidents..."):
-	raw = get_all_incidents()
+incidents = get_all_incidents()
 
-if isinstance(raw, pd.DataFrame):
-	df = raw.copy()
+if incidents.empty:
+    st.info("No incidents found.")
 else:
-	df = pd.DataFrame(raw)
+    st.subheader("Recorded Incidents")
+    st.dataframe(incidents, use_container_width=True)
 
-if "created_at" in df.columns:
-	df = df.drop(columns=["created_at"])
+    st.subheader("Severity Distribution")
+    st.bar_chart(incidents["severity"].value_counts())
 
-df = df.fillna("None")
+st.subheader("Report New Incident")
 
-if df.empty:
-	st.error("No incidents found.")
-	st.stop()
+with st.form("incident_form"):
+    incident_type = st.selectbox(
+        "Incident Type",
+        ["Phishing", "Malware", "DDoS", "Unauthorized Access"]
+    )
+    severity = st.selectbox("Severity", ["Low", "Medium", "High"])
+    status = st.selectbox("Status", ["Open", "In Progress", "Resolved"])
+    incident_date = st.date_input("Incident Date", value=date.today())
+    description = st.text_area("Description")
 
-st.subheader("Cyber Incidents")
-st.dataframe(df)
+    submitted = st.form_submit_button("Submit Incident")
 
-
-st.subheader("Incidents by Type")
-
-counts = df["severity"].value_counts().reset_index()
-counts.columns = ["severity", "count"]
-
-st.bar_chart(counts.set_index("severity")["count"])
-
-st.subheader("Add New Incident")
-
-with st.form("add_incident_form"):
-	date = st.date_input("Date")
-	incident_type = st.text_input("Incident Type")
-	severity = st.selectbox("Severity", ["Low", "Medium", "High"])
-	status = st.selectbox("Status", ["Open", "In Progress", "Resolved", "Closed"])
-	description = st.text_area("Description")
-
-	submitted = st.form_submit_button("Add Incident")
-
-	if submitted:
-		new_incident = {
-			"date": date,
-			"incident_type": incident_type,
-			"severity": severity,
-			"status": status,
-			"description": description,
-			"reported_by": st.session_state.get("username"),
-		}
-
-		create_incident(**new_incident)
-		st.success("Incident added.")
-		st.rerun()
+    if submitted:
+        if description.strip() == "":
+            st.warning("Description cannot be empty.")
+        else:
+            create_incident(
+                incident_type=incident_type,
+                severity=severity,
+                status=status,
+                description=description,
+                date=str(incident_date),
+                reported_by=st.session_state.get("username", "system")
+            )
+            st.success("Incident reported successfully.")
+            st.rerun()
