@@ -1,21 +1,29 @@
 import streamlit as st
 from app.services.user_service import login_user
 
-# Redirect if already logged in
-if st.session_state.get("logged_in"):
+# if the user is already logged in, redirect to dashboard
+if st.session_state.get("logged_in", False):
     st.switch_page("pages/Dashboard.py")
 
-st.title("Login")
+st.title("Sign In")
 
-username = st.text_input("Username")
-password = st.text_input("Password", type="password")
+# where the usear enters their credentials
+user_val = st.text_input("Enter your username")
+pass_val = st.text_input("Enter your password", type="password")
 
-st.page_link("pages/Register.py", label="Don't have an account? Register")
-if st.button("Login"):
-    success, message = login_user(username, password)
-    if success:
+st.page_link("pages/Register.py", label="Need an account? Create one")
+
+# logging in the user
+if st.button("Sign In"):
+    if not user_val or not pass_val:
+        st.error("Please enter both username and password.")
+        st.stop()
+
+    okay, feedback = login_user(user_val, pass_val)
+
+    if okay:
         st.session_state["logged_in"] = True
-        st.session_state["username"] = username
+        st.session_state["username"] = user_val
         st.switch_page("pages/Dashboard.py")
     else:
-        st.error(message)
+        st.error(feedback)
