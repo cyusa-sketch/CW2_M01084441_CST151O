@@ -1,17 +1,25 @@
 import sqlite3
 from pathlib import Path
 
-DB_DIR = Path(__file__).resolve().parents[2] / "DATA"
-DB_DIR.mkdir(parents=True, exist_ok=True)
-DB_PATH = DB_DIR / "intelligence_platform.db"
+# the base folder for the database file
+BASE_FOLDER = Path(__file__).resolve().parents[2] / "DATA"
+BASE_FOLDER.mkdir(parents=True, exist_ok=True)
 
-def connect_database(db_path=DB_PATH):
+DB_FILE = BASE_FOLDER / "intelligence_platform.db"
+
+
+# opening the database connection
+def connect_database(path: Path = DB_FILE):
     """
-    Connect to the SQLite database (creates file if missing).
-    Returns a sqlite3.Connection object.
+    Opens (or creates) the SQLite database file.
+    Returns a ready-to-use sqlite3 connection.
     """
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    # Enable foreign keys
-    conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+    db = sqlite3.connect(str(path))
+
+    # Allow column access by name
+    db.row_factory = sqlite3.Row
+
+    # Important: turn on foreign key constraints
+    db.execute("PRAGMA foreign_keys = ON;")
+
+    return db
